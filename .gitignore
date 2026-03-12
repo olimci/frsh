@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+.coverage
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+wheels/
+*.egg-info
+
+# Local tooling
+.DS_Store
+
+# Virtual environments
+.venv
+
+# Local scratch files
+.autogen_ssh_key
