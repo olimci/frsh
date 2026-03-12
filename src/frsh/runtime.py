@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,20 @@ def create_temp_file(*, mode, suffix, prefix):
     )
     temp_file.flush()
     return temp_file
+
+
+def create_temp_dir(*, prefix):
+    return Path(tempfile.mkdtemp(prefix=prefix))
+
+
+def cleanup_temp_dir(temp_dir):
+    if temp_dir is None:
+        return
+
+    try:
+        shutil.rmtree(temp_dir)
+    except OSError:
+        pass
 
 
 def read_process_output(log_file):

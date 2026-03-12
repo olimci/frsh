@@ -13,7 +13,9 @@ from pathlib import Path
 from .funnel import DEFAULT_TAILSCALE_FUNNEL_PORT, Funnel
 from .runtime import (
     cleanup_temp_file,
+    cleanup_temp_dir,
     create_temp_file,
+    create_temp_dir,
     is_executable_available,
     stop_process,
     wait_for_process_startup,
@@ -196,6 +198,7 @@ class Tunnel:
         self.ssh_proc = None
         self.cfg_file = None
         self.log_file = None
+        self.runtime_dir = None
         self.cleaned_up = False
         self.stop_requested = False
         self.stop_deadline = None
@@ -224,6 +227,10 @@ class Tunnel:
             f"bindPort = {bind_port}",
             f'proxyBindAddr = "{self.args.proxy_bind_addr}"',
             f"sshTunnelGateway.bindPort = {gateway_port}",
+            (
+                'sshTunnelGateway.autoGenPrivateKeyPath = '
+                f'"{self.runtime_dir / ".autogen_ssh_key"}"'
+            ),
             f'auth.token = "{token}"',
         ]
         if self.args.bind_addr:
@@ -317,8 +324,10 @@ class Tunnel:
 
         cleanup_temp_file(self.cfg_file)
         cleanup_temp_file(self.log_file)
+        cleanup_temp_dir(self.runtime_dir)
         self.cfg_file = None
         self.log_file = None
+        self.runtime_dir = None
 
     def request_stop(self, force=False):
         self.stop_ssh_session(force=force)
@@ -541,6 +550,7 @@ class Tunnel:
             stdout=self.log_file,
             stderr=subprocess.STDOUT,
             text=True,
+            cwd=self.runtime_dir,
         )
         return wait_for_process_startup(
             self.frps_proc,
@@ -629,6 +639,7 @@ class Tunnel:
             return 1
 
         token = secrets.token_hex(24)
+        self.runtime_dir = create_temp_dir(prefix="frps-runtime-")
         bind_port, gateway_port = self.allocate_ports()
         config = self.build_config(token, bind_port, gateway_port)
 
