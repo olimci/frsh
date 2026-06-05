@@ -29,3 +29,9 @@ If you have Tailscale installed, you can automatically create a Funnel:
 ```bash
 frsh --tailscale-funnel
 ```
+
+If public DNS takes a little while to publish the Funnel hostname, `frsh` retries the
+public IPv4 lookup a few times as a best-effort optimization. If it still cannot find a
+public IP, it falls back to using the Funnel hostname directly. You can tune that lookup
+window with `--tailscale-public-ip-attempts` and `--tailscale-public-ip-backoff`, or force
+an address with `--tailscale-public-ip`.

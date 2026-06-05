@@ -2,6 +2,7 @@ import ipaddress
 import json
 import subprocess
 import sys
+import time
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -15,6 +16,8 @@ from .runtime import (
 )
 
 DEFAULT_TAILSCALE_FUNNEL_PORT = 8443
+DEFAULT_TAILSCALE_PUBLIC_IP_ATTEMPTS = 5
+DEFAULT_TAILSCALE_PUBLIC_IP_BACKOFF = 2.0
 TAILSCALE_FUNNEL_PORTS = (443, 8443, 10000)
 LOCALHOST = "127.0.0.1"
 PUBLIC_DNS_ENDPOINTS = (
@@ -77,22 +80,7 @@ class Funnel:
             return False
 
         self.args.server_host = server_host
-        self.public_ip = self.resolve_public_ip(server_host)
-        if self.public_ip:
-            return True
-
-        print(
-            error_text(
-                "Error: could not resolve a public IPv4 address for the "
-                "Tailscale Funnel hostname."
-            ),
-            file=sys.stderr,
-        )
-        print(
-            "Pass --tailscale-public-ip explicitly if public DNS has not propagated yet.",
-            file=sys.stderr,
-        )
-        return False
+        return True
 
     def infer_server_host(self, error_text):
         result = subprocess.run(
@@ -133,32 +121,36 @@ class Funnel:
         if self.args.tailscale_public_ip:
             return self.args.tailscale_public_ip
 
-        for url_template, headers in PUBLIC_DNS_ENDPOINTS:
-            request = urllib_request.Request(
-                url_template.format(hostname=hostname),
-                headers=headers,
-            )
-            try:
-                with urllib_request.urlopen(request, timeout=5) as response:
-                    payload = json.load(response)
-            except (OSError, TimeoutError, ValueError, urllib_error.URLError):
-                continue
-
-            for answer in payload.get("Answer") or []:
-                if answer.get("type") != 1:
-                    continue
-
-                candidate = answer.get("data")
-                if not candidate:
-                    continue
-
+        for attempt in range(self.args.tailscale_public_ip_attempts):
+            for url_template, headers in PUBLIC_DNS_ENDPOINTS:
+                request = urllib_request.Request(
+                    url_template.format(hostname=hostname),
+                    headers=headers,
+                )
                 try:
-                    ip = ipaddress.ip_address(candidate)
-                except ValueError:
+                    with urllib_request.urlopen(request, timeout=5) as response:
+                        payload = json.load(response)
+                except (OSError, TimeoutError, ValueError, urllib_error.URLError):
                     continue
 
-                if isinstance(ip, ipaddress.IPv4Address) and ip.is_global:
-                    return candidate
+                for answer in payload.get("Answer") or []:
+                    if answer.get("type") != 1:
+                        continue
+
+                    candidate = answer.get("data")
+                    if not candidate:
+                        continue
+
+                    try:
+                        ip = ipaddress.ip_address(candidate)
+                    except ValueError:
+                        continue
+
+                    if isinstance(ip, ipaddress.IPv4Address) and ip.is_global:
+                        return candidate
+
+            if attempt + 1 < self.args.tailscale_public_ip_attempts:
+                time.sleep(self.args.tailscale_public_ip_backoff)
 
         return None
 
@@ -218,6 +210,7 @@ class Funnel:
             log_file=self.log_file,
             error_text=error_text,
         ):
+            self.public_ip = self.resolve_public_ip(self.args.server_host)
             return True
 
         self.proc = None

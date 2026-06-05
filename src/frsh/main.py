@@ -10,7 +10,12 @@ import sys
 import time
 from pathlib import Path
 
-from .funnel import DEFAULT_TAILSCALE_FUNNEL_PORT, Funnel
+from .funnel import (
+    DEFAULT_TAILSCALE_FUNNEL_PORT,
+    DEFAULT_TAILSCALE_PUBLIC_IP_ATTEMPTS,
+    DEFAULT_TAILSCALE_PUBLIC_IP_BACKOFF,
+    Funnel,
+)
 from .runtime import (
     cleanup_temp_file,
     cleanup_temp_dir,
@@ -172,6 +177,18 @@ def parse_args(argv=None):
         help="Optional public IPv4 address to use for the Funnel TLS connection",
     )
     parser.add_argument(
+        "--tailscale-public-ip-attempts",
+        type=int,
+        default=DEFAULT_TAILSCALE_PUBLIC_IP_ATTEMPTS,
+        help="How many times to retry resolving the Funnel public IPv4 via DNS",
+    )
+    parser.add_argument(
+        "--tailscale-public-ip-backoff",
+        type=float,
+        default=DEFAULT_TAILSCALE_PUBLIC_IP_BACKOFF,
+        help="Seconds to wait between Funnel public IPv4 DNS retries",
+    )
+    parser.add_argument(
         "-c",
         "--copy",
         action="store_true",
@@ -188,6 +205,10 @@ def parse_args(argv=None):
         args.tailscale_funnel_port = (
             DEFAULT_TAILSCALE_FUNNEL_PORT if args.tailscale_funnel else args.remote_port
         )
+    if args.tailscale_public_ip_attempts < 1:
+        parser.error("--tailscale-public-ip-attempts must be at least 1")
+    if args.tailscale_public_ip_backoff < 0:
+        parser.error("--tailscale-public-ip-backoff must be non-negative")
     return args
 
 
